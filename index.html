@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Payroll & QR Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1ec;--card:#fff;--ink:#16302a;--mut:#5d6f68;--line:#d3dbd4;--acc:#0f6b57;--acc2:#e3a72f;--bad:#b5362b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a17;--card:#17261f;--ink:#e6efe9;--mut:#93a89f;--line:#2b4036;--acc:#3fb596;--acc2:#e3a72f;--bad:#f0786c}}
+:root[data-theme="dark"]{--bg:#0f1a17;--card:#17261f;--ink:#e6efe9;--mut:#93a89f;--line:#2b4036;--acc:#3fb596;--acc2:#e3a72f;--bad:#f0786c}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Public Sans",system-ui,sans-serif}
+header{background:var(--acc);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em}
+#clock{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600}
+nav{display:flex;gap:4px;padding:10px 14px 0;overflow-x:auto;border-bottom:2px solid var(--line)}
+nav button{border:0;background:none;color:var(--mut);font:600 14px inherit;padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+nav button.on{color:var(--ink);border-color:var(--acc2)}
+main{max-width:1000px;margin:0 auto;padding:18px 14px 60px}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:17px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px;flex:1;min-width:120px}
+input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+button.b{font:600 14px inherit;border:0;border-radius:6px;padding:9px 16px;background:var(--acc);color:#fff;cursor:pointer}
+button.b.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.b.del{background:transparent;color:var(--bad);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--acc2);outline-offset:1px}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--mut);font-weight:600}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.scan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:700px){.scan{grid-template-columns:1fr}}
+.vid{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3}
+.vid video{width:100%;height:100%;object-fit:cover}
+.vid:after{content:"";position:absolute;inset:18%;border:3px solid var(--acc2);border-radius:10px;pointer-events:none}
+#res{min-height:64px;padding:12px;border-radius:8px;border:1px solid var(--line);margin-top:10px;font-weight:600}
+#res.in{background:#d7f0e6;color:#0b4a3a}#res.out{background:#fbe9c4;color:#5b4108}#res.err{background:#f8d9d5;color:#7c1f17}
+.qrs{display:flex;gap:6px;align-items:center}
+.stat{font-size:22px;font-weight:800}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;background:var(--line)}
+.tag.open{background:var(--acc2);color:#2b2000}
+#printArea{display:none}
+.badge{display:inline-block;border:2px solid #16302a;border-radius:10px;padding:14px;margin:8px;text-align:center;width:220px;color:#16302a;background:#fff;page-break-inside:avoid}
+.badge .qr{display:flex;justify-content:center;margin:8px 0}.badge b{font-size:16px}
+.slip{color:#000;background:#fff;padding:24px;max-width:640px;margin:auto;font-size:13px}
+.slip table td,.slip table th{border-bottom:1px solid #999;color:#000}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block}body{background:#fff}}
+</style>
+</head>
+<body>
+<header><h1>Payroll &amp; QR Attendance</h1><div id="clock"></div></header>
+<nav id="tabs">
+  <button data-t="scan" class="on">Scan attendance</button>
+  <button data-t="emp">Employees</button>
+  <button data-t="log">Time records</button>
+  <button data-t="pay">Payroll</button>
+</nav>
+<main>
+<section id="scan" class="on">
+  <div class="scan">
+    <div>
+      <div class="vid"><video id="v" playsinline muted></video></div>
+      <div class="row" style="margin-top:10px">
+        <button class="b" id="camBtn">Start camera</button>
+        <label style="flex:2"><span>Or type the employee ID</span><input id="man" placeholder="EMP-001"></label>
+        <button class="b alt" id="manBtn">Record</button>
+      </div>
+      <div id="res">Show your QR badge to the camera.</div>
+    </div>
+    <div class="card" style="margin:0"><h2>Today</h2><div class="tw"><table><thead><tr><th>Employee</th><th>In</th><th>Out</th></tr></thead><tbody id="today"></tbody></table></div></div>
+  </div>
+  <canvas id="cv" hidden></canvas>
+</section>
+
+<section id="emp">
+  <div class="card"><h2>Add employee</h2>
+    <div class="row">
+      <label>ID<input id="eId" placeholder="auto"></label>
+      <label style="flex:2">Full name<input id="eName"></label>
+      <label>Position<input id="ePos"></label>
+      <label>Hourly rate<input id="eRate" type="number" min="0" step="0.01"></label>
+      <label>Deductions per period<input id="eDed" type="number" min="0" step="0.01" value="0"></label>
+      <button class="b" id="eAdd">Add</button>
+    </div></div>
+  <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Employees</h2><div class="row"><button class="b alt" id="badgeAll">Print all QR badges</button><button class="b alt" id="exp">Back up data</button><button class="b alt" id="impB">Restore</button><input type="file" id="imp" accept=".json" hidden></div></div>
+    <div class="tw"><table><thead><tr><th>QR</th><th>ID</th><th>Name</th><th>Position</th><th class="n">Rate</th><th class="n">Deductions</th><th></th></tr></thead><tbody id="eBody"></tbody></table></div>
+    <p id="eEmpty" style="color:var(--mut)">No employees yet. Add your first one above, then print their QR badge.</p></div>
+</section>
+
+<section id="log">
+  <div class="card"><div class="row">
+    <label>From<input type="date" id="lf"></label><label>To<input type="date" id="lt"></label>
+    <label>Employee<select id="ls"></select></label></div></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th><th class="n">Hours</th><th></th></tr></thead><tbody id="lBody"></tbody></table></div></div>
+</section>
+
+<section id="pay">
+  <div class="card"><div class="row">
+    <label>Period start<input type="date" id="pf"></label><label>Period end<input type="date" id="pt"></label>
+    <label>Unpaid break (hrs/day)<input type="number" id="pb" value="1" min="0" step="0.25"></label>
+    <label>Regular hours/day<input type="number" id="pr" value="8" min="1" step="0.5"></label>
+    <label>Overtime multiplier<input type="number" id="pm" value="1.25" min="1" step="0.05"></label>
+    <label>Currency<input id="pc" value="₱" maxlength="3"></label>
+    <button class="b" id="pRun">Compute</button></div></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Employee</th><th class="n">Days</th><th class="n">Reg hrs</th><th class="n">OT hrs</th><th class="n">Gross</th><th class="n">Deductions</th><th class="n">Net pay</th><th></th></tr></thead><tbody id="pBody"></tbody><tfoot id="pFoot"></tfoot></table></div>
+    <div class="row" style="margin-top:10px"><button class="b alt" id="csv">Download CSV</button><button class="b alt" id="slipAll">Print all payslips</button></div></div>
+</section>
+</main>
+<div id="printArea"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let D={emps:[],logs:[]};
+try{const s=localStorage.getItem('payrollqr');if(s)D=JSON.parse(s)}catch(e){}
+const save=()=>{try{localStorage.setItem('payrollqr',JSON.stringify(D))}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)};
+const tm=t=>t?new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+const money=(n,c)=>(c||'₱')+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const emp=id=>D.emps.find(e=>e.id===id);
+const hrs=l=>l.out?(new Date(l.out)-new Date(l.in))/36e5:0;
+
+// tabs
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button,section').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');$(b.dataset.t).classList.add('on');
+  if(b.dataset.t!=='scan')stopCam();render();});
+setInterval(()=>$('clock').textContent=new Date().toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),1000);
+
+// employees
+$('eAdd').onclick=()=>{
+  const name=$('eName').value.trim(),rate=parseFloat($('eRate').value);
+  if(!name||!(rate>=0)){alert('Enter a name and an hourly rate.');return}
+  let id=$('eId').value.trim().toUpperCase();
+  if(!id){let n=D.emps.length+1;do{id='EMP-'+String(n++).padStart(3,'0')}while(emp(id))}
+  if(emp(id)){alert('ID '+id+' is already used.');return}
+  D.emps.push({id,name,pos:$('ePos').value.trim(),rate,ded:parseFloat($('eDed').value)||0});
+  ['eId','eName','ePos','eRate'].forEach(i=>$(i).value='');save();render();};
+function badgeHTML(e){return `<div class="badge"><div>Attendance badge</div><div class="qr" data-q="${esc(e.id)}"></div><b>${esc(e.name)}</b><div>${esc(e.pos)}</div><div>${esc(e.id)}</div></div>`}
+function mkQR(root){root.querySelectorAll('[data-q]').forEach(el=>{el.innerHTML='';new QRCode(el,{text:el.dataset.q,width:140,height:140,correctLevel:QRCode.CorrectLevel.M})})}
+function doPrint(html){$('printArea').innerHTML=html;mkQR($('printArea'));setTimeout(()=>window.print(),300)}
+$('badgeAll').onclick=()=>D.emps.length?doPrint(D.emps.map(badgeHTML).join('')):alert('Add employees first.');
+function renderEmps(){
+  $('eEmpty').style.display=D.emps.length?'none':'block';
+  $('eBody').innerHTML=D.emps.map(e=>`<tr><td><span data-q="${esc(e.id)}" class="mini"></span></td><td>${esc(e.id)}</td><td>${esc(e.name)}</td><td>${esc(e.pos)}</td><td class="n">${money(e.rate)}</td><td class="n">${money(e.ded)}</td><td><button class="b alt" data-p="${esc(e.id)}">Print badge</button> <button class="b del" data-d="${esc(e.id)}">Remove</button></td></tr>`).join('');
+  document.querySelectorAll('#eBody [data-q]').forEach(el=>new QRCode(el,{text:el.dataset.q,width:48,height:48}));
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>doPrint(badgeHTML(emp(b.dataset.p))));
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{if(confirm('Remove '+b.dataset.d+'? Their time records are kept.')){D.emps=D.emps.filter(e=>e.id!==b.dataset.d);save();render()}});
+}
+$('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));a.download='payroll-backup.json';a.click()};
+$('impB').onclick=()=>$('imp').click();
+$('imp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const j=JSON.parse(r.result);if(!j.emps||!j.logs)throw 0;D=j;save();render()}catch(x){alert('That file is not a valid backup.')}};r.readAsText(f)};
+
+// attendance
+function record(code){
+  code=String(code).trim().toUpperCase();const e=emp(code),res=$('res');
+  if(!e){res.className='err';res.textContent='Unknown ID: '+code+'. Check the badge or add the employee.';return false}
+  const today=iso(new Date()),now=new Date().toISOString();
+  const open=D.logs.find(l=>l.emp===code&&!l.out);
+  if(open){open.out=now;res.className='out';res.textContent='Time out — '+e.name+' at '+tm(now)+' ('+hrs(open).toFixed(2)+' hrs)'}
+  else{D.logs.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),emp:code,date:today,in:now,out:null});res.className='in';res.textContent='Time in — '+e.name+' at '+tm(now)}
+  save();renderToday();return true}
+$('manBtn').onclick=()=>{if($('man').value)record($('man').value);$('man').value=''};
+$('man').onkeydown=e=>{if(e.key==='Enter')$('manBtn').click()};
+function renderToday(){const t=iso(new Date());const L=D.logs.filter(l=>l.date===t).reverse();
+  $('today').innerHTML=L.length?L.map(l=>`<tr><td>${esc((emp(l.emp)||{name:l.emp}).name)}</td><td>${tm(l.in)}</td><td>${l.out?tm(l.out):'<span class="tag open">on duty</span>'}</td></tr>`).join(''):'<tr><td colspan="3" style="color:var(--mut)">No scans yet today.</td></tr>'}
+let stream=null,raf=0,lastCode='',lastT=0;
+async function startCam(){
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v=$('v');v.srcObject=stream;await v.play();$('camBtn').textContent='Stop camera';loop()}
+  catch(e){$('res').className='err';$('res').textContent='Camera unavailable. Allow camera access, or type the ID instead.'}}
+function stopCam(){cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('camBtn').textContent='Start camera'}
+function loop(){
+  const v=$('v'),c=$('cv');
+  if(v.readyState===4){c.width=v.videoWidth;c.height=v.videoHeight;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0);
+    const img=x.getImageData(0,0,c.width,c.height),q=jsQR(img.data,img.width,img.height);
+    if(q&&q.data&&(q.data!==lastCode||Date.now()-lastT>6000)){lastCode=q.data;lastT=Date.now();record(q.data)}}
+  raf=requestAnimationFrame(loop)}
+$('camBtn').onclick=()=>stream?stopCam():startCam();
+
+// records
+function renderLog(){
+  const f=$('lf').value,t=$('lt').value,s=$('ls').value;
+  $('ls').innerHTML='<option value="">All employees</option>'+D.emps.map(e=>`<option value="${esc(e.id)}"${e.id===s?' selected':''}>${esc(e.name)}</option>`).join('');
+  const L=D.logs.filter(l=>(!f||l.date>=f)&&(!t||l.date<=t)&&(!s||l.emp===s)).sort((a,b)=>b.in.localeCompare(a.in));
+  $('lBody').innerHTML=L.length?L.map(l=>`<tr><td>${l.date}</td><td>${esc((emp(l.emp)||{name:l.emp}).name)}</td><td>${tm(l.in)}</td><td>${l.out?tm(l.out):'<span class="tag open">open</span>'}</td><td class="n">${l.out?hrs(l).toFixed(2):'—'}</td><td><button class="b del" data-x="${l.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="6" style="color:var(--mut)">No records match.</td></tr>';
+  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{D.logs=D.logs.filter(l=>l.id!==b.dataset.x);save();renderLog()})}
+['lf','lt','ls'].forEach(i=>$(i).onchange=renderLog);
+
+// payroll
+let P=[];
+function compute(){
+  const f=$('pf').value,t=$('pt').value;if(!f||!t){alert('Choose a period start and end date.');return}
+  const br=+$('pb').value||0,rg=+$('pr').value||8,m=+$('pm').value||1.25;
+  P=D.emps.map(e=>{const days={};
+    D.logs.filter(l=>l.emp===e.id&&l.out&&l.date>=f&&l.date<=t).forEach(l=>{days[l.date]=(days[l.date]||0)+Math.max(0,hrs(l))});
+    let reg=0,ot=0;Object.values(days).forEach(h=>{h=Math.max(0,h-(h>5?br:0));reg+=Math.min(h,rg);ot+=Math.max(0,h-rg)});
+    const gross=reg*e.rate+ot*e.rate*m,ded=Math.min(e.ded,gross);
+    return{e,days:Object.keys(days).length,reg,ot,gross,ded,net:gross-ded,f,t}});
+  drawPay()}
+function drawPay(){const c=$('pc').value;
+  $('pBody').innerHTML=P.length?P.map((r,i)=>`<tr><td>${esc(r.e.name)}</td><td class="n">${r.days}</td><td class="n">${r.reg.toFixed(2)}</td><td class="n">${r.ot.toFixed(2)}</td><td class="n">${money(r.gross,c)}</td><td class="n">${money(r.ded,c)}</td><td class="n"><b>${money(r.net,c)}</b></td><td><button class="b alt" data-s="${i}">Payslip</button></td></tr>`).join(''):'<tr><td colspan="8" style="color:var(--mut)">Pick a period and press Compute.</td></tr>';
+  const T=k=>P.reduce((a,r)=>a+r[k],0);
+  $('pFoot').innerHTML=P.length?`<tr><th>Total</th><th></th><th class="n">${T('reg').toFixed(2)}</th><th class="n">${T('ot').toFixed(2)}</th><th class="n">${money(T('gross'),c)}</th><th class="n">${money(T('ded'),c)}</th><th class="n">${money(T('net'),c)}</th><th></th></tr>`:'';
+  document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>doPrint(slip(P[b.dataset.s])))}
+function slip(r){const c=$('pc').value,m=+$('pm').value;return `<div class="slip" style="page-break-after:always"><h2>Payslip</h2><p><b>${esc(r.e.name)}</b> (${esc(r.e.id)}) — ${esc(r.e.pos)}<br>Period: ${r.f} to ${r.t}</p><table><tr><th>Item</th><th>Hours</th><th>Rate</th><th style="text-align:right">Amount</th></tr><tr><td>Regular pay</td><td>${r.reg.toFixed(2)}</td><td>${money(r.e.rate,c)}</td><td style="text-align:right">${money(r.reg*r.e.rate,c)}</td></tr><tr><td>Overtime</td><td>${r.ot.toFixed(2)}</td><td>${money(r.e.rate*m,c)}</td><td style="text-align:right">${money(r.ot*r.e.rate*m,c)}</td></tr><tr><td colspan="3"><b>Gross pay</b></td><td style="text-align:right"><b>${money(r.gross,c)}</b></td></tr><tr><td colspan="3">Deductions</td><td style="text-align:right">-${money(r.ded,c)}</td></tr><tr><td colspan="3"><b>Net pay</b></td><td style="text-align:right"><b>${money(r.net,c)}</b></td></tr></table><p style="margin-top:40px">Employee signature: ______________________</p></div>`}
+$('pRun').onclick=compute;$('pc').oninput=drawPay;
+$('slipAll').onclick=()=>P.length?doPrint(P.map(slip).join('')):alert('Compute payroll first.');
+$('csv').onclick=()=>{if(!P.length){alert('Compute payroll first.');return}
+  const rows=[['ID','Name','Days','Regular hrs','OT hrs','Gross','Deductions','Net']].concat(P.map(r=>[r.e.id,r.e.name,r.days,r.reg.toFixed(2),r.ot.toFixed(2),r.gross.toFixed(2),r.ded.toFixed(2),r.net.toFixed(2)]));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n')],{type:'text/csv'}));a.download='payroll-'+$('pf').value+'_'+$('pt').value+'.csv';a.click()};
+
+function render(){renderEmps();renderToday();renderLog();drawPay()}
+const d=new Date();$('pt').value=iso(d);$('pf').value=iso(new Date(d.getFullYear(),d.getMonth(),d.getDate()<=15?1:16));
+render();
+</script>
+</body>
+</html>
